@@ -301,11 +301,11 @@ void MemoryAllocator::CopyMemory(void* oldMem, void* newMem)
 {
 	int pageNumberOld = ((uint16_t*)oldMem - (uint16_t*)memPart) / PAGE_SIZE;
 	uint16_t* pageOld = (uint16_t*)memPart + pageNumberOld * PAGE_SIZE;
-	int oldSize = pageDescrPtrs[pageOld].classSize;
+	int oldSize = pageDescrPtrs[pageOld].classSize + (pageDescrPtrs[pageOld].state == pageState::blockFilled ? -1 : 0);
 
 	int pageNumberNew = ((uint16_t*)newMem - (uint16_t*)memPart) / PAGE_SIZE;
 	uint16_t* pageNew = (uint16_t*)memPart + pageNumberNew * PAGE_SIZE;
-	int newSize = pageDescrPtrs[pageNew].classSize;
+	int newSize = pageDescrPtrs[pageNew].classSize + (pageDescrPtrs[pageOld].state == pageState::blockFilled ? -1 : 0);
 
 	char* j = (char*)newMem;
 	int counter = 0;
@@ -316,8 +316,8 @@ void MemoryAllocator::CopyMemory(void* oldMem, void* newMem)
 }
 void MemoryAllocator::ResetFlags(void* addr)
 {
-	int pageNumber = ((uint16_t*)addr - (uint16_t*)memPart) / PAGE_SIZE;
-	uint16_t* page = (uint16_t*)memPart + pageNumber * PAGE_SIZE;
+	int pageNumber = ((int*)addr - (int*)memPart) / (int)PAGE_SIZE;
+	int* page = (int*)memPart + (int)pageNumber * (int)PAGE_SIZE;
 
 	cout << "\nFreeing the " << pageDescrPtrs[page].classSize * (pageDescrPtrs[page].state == pageState::multipageBlockFilled ? PAGE_SIZE : 1) << " bytes sized block from ";
 	if (pageDescrPtrs[page].state == pageState::blockFilled) cout << "page #" << pageNumber << ". The block number: #" << ((int*)addr - (int*)page) / pageDescrPtrs[page].classSize + 1 << endl << endl;
@@ -387,7 +387,7 @@ void* MemoryAllocator::mem_alloc(size_t size)
 	bool inpageBlock = size < PAGE_SIZE / 2;
 	int classSize = GetClosestClass(size + 1, inpageBlock);
 
-	cout << "\nTrying to allocate " << (inpageBlock ? size + 1 : size) << " bytes. Data: " << size << " bytes" << (inpageBlock ? " + header: " : ".") << (inpageBlock ? HEADER_SIZE + " bytes." : "") << endl;
+	cout << "\nTrying to allocate " << (inpageBlock ? size + 1 : size) << " bytes. Data: " << size << " bytes" << (inpageBlock ? " + header: 1 byte" : ".") << endl;
 	cout << "The closest classSize is: " << classSize << endl;
 
 	void* memPointer = inpageBlock ? GetFreeClassBlock(classSize) : GetPages(classSize);
@@ -484,7 +484,9 @@ void Test()
 
 	allocator.mem_dump();
 	void* a = allocator.mem_alloc(15);
+	*(int*)a = 6;
 	void* b = allocator.mem_alloc(14);
+	*(int*)b = 7;
 	allocator.mem_dump();
 	void* c = allocator.mem_alloc(30);
 	allocator.mem_dump();
@@ -502,11 +504,17 @@ void Test()
 	allocator.mem_dump();
 	allocator.mem_free(f);
 	allocator.mem_dump();
+	e = allocator.mem_realloc(e, 14);
+	*(int*)e = 9;
+	b = allocator.mem_realloc(b, 14);
+	allocator.mem_dump();
 }
 
 int main()
 {
 	Test();
+
+	//TODO page data in multipage blocks
 
 	return 0;
 }
