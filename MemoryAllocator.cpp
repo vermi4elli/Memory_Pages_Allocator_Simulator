@@ -217,16 +217,21 @@ void* MemoryAllocator::GetConsecutiveFreePages(size_t pagesAmount)
 	int consecutiveFor = 1;
 	void* result = nullptr;
 
-	for (auto i = freePages.begin(); i != freePages.end(); i++)
+	if (freePages.size() >= pagesAmount)
 	{
-		if (i != freePages.end() - 1)
+		for (auto i = freePages.begin(); i != freePages.end(); i++)
 		{
-			if ((uint16_t*)*next(i) - PAGE_SIZE == (uint16_t*)*i) consecutiveFor++;
-			else consecutiveFor = 1;
-
-			if (consecutiveFor == pagesAmount)
+			if (i != freePages.begin())
 			{
-				result = (uint16_t*)*next(i) - (PAGE_SIZE * (pagesAmount - 1));
+				int consecutiveForTemp = consecutiveFor;
+				if ((int*)*prev(i) + PAGE_SIZE == (int*)*i) consecutiveFor++;
+
+				if (consecutiveFor == pagesAmount)
+				{
+					result = (int*)*i - (int)PAGE_SIZE * ((int)pagesAmount - 1);
+				}
+
+				consecutiveFor = consecutiveForTemp == consecutiveFor ? 1 : consecutiveFor;
 			}
 		}
 	}
@@ -251,11 +256,11 @@ void MemoryAllocator::FlagBlockAsTaken(void* block)
 }
 void MemoryAllocator::FlagPagesAsTaken(void* page, int size, int pagesTaken)
 {
-	uint16_t* tempPage = (uint16_t*)page;
+	int* tempPage = (int*)page;
 
 	for (int i = 0; i < pagesTaken; i++)
 	{
-		freePages.erase(find(freePages.begin(), freePages.end(), (void*)tempPage));
+		freePages.erase(find(freePages.begin(), freePages.end(), tempPage));
 
 		pageDescrPtrs[tempPage].state = pageState::multipageBlockFilled;
 		pageDescrPtrs[tempPage].amount = pagesTaken - i;
@@ -268,10 +273,19 @@ void MemoryAllocator::FlagPageAsFree(void* page)
 {
 	pageDescrPtrs[page].state = pageState::free;
 	pageDescrPtrs[page].amount = 0;
-	pageDescrPtrs[page].classSize = 0;
 	pageDescrPtrs[page].firstFreeBlock = nullptr;
+	
+	if (pageDescrPtrs[page].classSize <= PAGE_SIZE / 2)
+	{
+		auto search = find(freeClassBlocks[pageDescrPtrs[page].classSize].begin(), freeClassBlocks[pageDescrPtrs[page].classSize].end(), page);
+		if (search != freeClassBlocks[pageDescrPtrs[page].classSize].end())
+		{
+			freeClassBlocks[pageDescrPtrs[page].classSize].erase(search);
+		}
+	}
+	pageDescrPtrs[page].classSize = 0;
 
-	freePages.emplace(upper_bound(freePages.begin(), freePages.end(), (int*)page));
+	freePages.emplace(upper_bound(freePages.begin(), freePages.end(), page), page);
 }
 bool MemoryAllocator::CreateClassBlock(size_t classSize)
 {
@@ -305,19 +319,19 @@ void MemoryAllocator::ResetFlags(void* addr)
 	int pageNumber = ((uint16_t*)addr - (uint16_t*)memPart) / PAGE_SIZE;
 	uint16_t* page = (uint16_t*)memPart + pageNumber * PAGE_SIZE;
 
-	cout << "\nFreeing the " << pageDescrPtrs[page].classSize << " bytes sized block from ";
-	if (pageDescrPtrs[page].state == pageState::blockFilled) cout << "page #" << pageNumber << ". The block number: #" << ((int*)addr - (int*)page) / pageDescrPtrs[page].classSize + 1 << endl;
-	else cout << "pages #" << pageNumber << "to #" << pageNumber + pageDescrPtrs[page].amount << endl;
+	cout << "\nFreeing the " << pageDescrPtrs[page].classSize * (pageDescrPtrs[page].state == pageState::multipageBlockFilled ? PAGE_SIZE : 1) << " bytes sized block from ";
+	if (pageDescrPtrs[page].state == pageState::blockFilled) cout << "page #" << pageNumber << ". The block number: #" << ((int*)addr - (int*)page) / pageDescrPtrs[page].classSize + 1 << endl << endl;
+	else cout << "pages #" << pageNumber << " to #" << pageNumber + pageDescrPtrs[page].amount << endl << endl;
 
 	if (pageDescrPtrs[page].state == pageState::multipageBlockFilled)
 	{
 		int size = pageDescrPtrs[page].amount;
-		uint16_t* tempPage = page;
+		int* tempPage = (int*)page;
 		for (int i = 0; i < size; i++)
 		{
-			FlagPageAsFree(page);
+			FlagPageAsFree(tempPage);
 
-			tempPage += PAGE_SIZE;
+			tempPage += (int)PAGE_SIZE;
 		}
 	}
 	else
@@ -485,6 +499,8 @@ void Test()
 	a = allocator.mem_alloc(8);
 	allocator.mem_dump();
 	allocator.mem_free(d);
+	allocator.mem_dump();
+	allocator.mem_free(f);
 	allocator.mem_dump();
 }
 
