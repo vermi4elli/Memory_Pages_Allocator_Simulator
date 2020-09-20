@@ -69,6 +69,9 @@ private:
 	// Does all actions to mark the pages as taken: changing the pages describer, the free pages pointers lists.
 	void FlagPagesAsTaken(void* page, int size, int pagesTaken);
 
+	// Does all actions to mark the page as free: changes the pages describer, the free pages pointers list.
+	void FlagPageAsFree(void* page);
+
 	// Creates a new page with the blocks of the chosen classSize.
 	bool CreateClassBlock(size_t classSize);
 
@@ -176,6 +179,7 @@ int MemoryAllocator::GetClosestClass(size_t size, const bool& inpageBlock)
 			if (i == PAGE_SIZE / 2) break;
 		}
 	}
+	else return size - 1;
 
 	return size;
 }
@@ -260,6 +264,15 @@ void MemoryAllocator::FlagPagesAsTaken(void* page, int size, int pagesTaken)
 		tempPage += PAGE_SIZE;
 	}
 }
+void MemoryAllocator::FlagPageAsFree(void* page)
+{
+	pageDescrPtrs[page].state = pageState::free;
+	pageDescrPtrs[page].amount = 0;
+	pageDescrPtrs[page].classSize = 0;
+	pageDescrPtrs[page].firstFreeBlock = nullptr;
+
+	freePages.emplace(upper_bound(freePages.begin(), freePages.end(), (int*)page));
+}
 bool MemoryAllocator::CreateClassBlock(size_t classSize)
 {
 	if (freePages.empty()) return false;
@@ -292,7 +305,7 @@ void MemoryAllocator::ResetFlags(void* addr)
 	int pageNumber = ((uint16_t*)addr - (uint16_t*)memPart) / PAGE_SIZE;
 	uint16_t* page = (uint16_t*)memPart + pageNumber * PAGE_SIZE;
 
-	cout << "Trying to free the " << pageDescrPtrs[page].classSize << " bytes sized block from ";
+	cout << "\nFreeing the " << pageDescrPtrs[page].classSize << " bytes sized block from ";
 	if (pageDescrPtrs[page].state == pageState::blockFilled) cout << "page #" << pageNumber << ". The block number: #" << ((int*)addr - (int*)page) / pageDescrPtrs[page].classSize + 1 << endl;
 	else cout << "pages #" << pageNumber << "to #" << pageNumber + pageDescrPtrs[page].amount << endl;
 
@@ -302,11 +315,7 @@ void MemoryAllocator::ResetFlags(void* addr)
 		uint16_t* tempPage = page;
 		for (int i = 0; i < size; i++)
 		{
-			pageDescrPtrs[tempPage].state = pageState::free;
-			pageDescrPtrs[tempPage].classSize = 0;
-			pageDescrPtrs[tempPage].amount = 0;
-
-			freePages.emplace(find(freePages.begin(), freePages.end(), tempPage + PAGE_SIZE));
+			FlagPageAsFree(page);
 
 			tempPage += PAGE_SIZE;
 		}
@@ -326,6 +335,8 @@ void MemoryAllocator::ResetFlags(void* addr)
 				{
 					*(tempAddr - (int)HEADER_SIZE) = (int)addr;
 					*((int*)addr - (int)HEADER_SIZE) = (int)pageDescrPtrs[page].firstFreeBlock;
+
+					if ((int*)addr < pageDescrPtrs[page].firstFreeBlock) pageDescrPtrs[page].firstFreeBlock = (int*)addr;
 				}
 
 				tempAddr = (int*)(int)*(tempAddr - (int)HEADER_SIZE);
@@ -339,6 +350,11 @@ void MemoryAllocator::ResetFlags(void* addr)
 		}
 
 		pageDescrPtrs[page].amount++;
+
+		if (pageDescrPtrs[page].amount == PAGE_SIZE / pageDescrPtrs[page].classSize)
+		{
+			FlagPageAsFree(page);
+		}
 	}
 }
 void* MemoryAllocator::GetPages(size_t size)
@@ -357,13 +373,13 @@ void* MemoryAllocator::mem_alloc(size_t size)
 	bool inpageBlock = size < PAGE_SIZE / 2;
 	int classSize = GetClosestClass(size + 1, inpageBlock);
 
-	cout << "Trying to allocate " << size + 1 << " bytes. Data: " << size << " bytes + header: " << HEADER_SIZE << " bytes." << endl;
+	cout << "\nTrying to allocate " << (inpageBlock ? size + 1 : size) << " bytes. Data: " << size << " bytes" << (inpageBlock ? " + header: " : ".") << (inpageBlock ? HEADER_SIZE + " bytes." : "") << endl;
 	cout << "The closest classSize is: " << classSize << endl;
 
 	void* memPointer = inpageBlock ? GetFreeClassBlock(classSize) : GetPages(classSize);
 
-	if (memPointer != nullptr) cout << "\nDone!" << endl;
-	else cout << "\nFailed! Not enough memory" << endl;
+	if (memPointer != nullptr) cout << "\nDone!\n" << endl;
+	else cout << "\nFailed! Not enough memory\n" << endl;
 
 	return memPointer;
 }
@@ -454,22 +470,22 @@ void Test()
 
 	allocator.mem_dump();
 	void* a = allocator.mem_alloc(15);
-	allocator.mem_dump();
 	void* b = allocator.mem_alloc(14);
-	allocator.mem_dump();
-	allocator.mem_free(a);
 	allocator.mem_dump();
 	void* c = allocator.mem_alloc(30);
 	allocator.mem_dump();
-	//void* d = allocator.mem_alloc(60);
-	//void* e = allocator.mem_alloc(162);
-	//void* f = allocator.mem_alloc(800);
-	//allocator.mem_dump();
-	//allocator.mem_free(d);
-	//allocator.mem_dump();
-
-
-	std::cout << "Done!" << endl;
+	void* d = allocator.mem_alloc(60);
+	allocator.mem_dump();
+	void* e = allocator.mem_alloc(162);
+	allocator.mem_dump();
+	void* f = allocator.mem_alloc(800);
+	allocator.mem_dump();
+	allocator.mem_free(a);
+	allocator.mem_dump();
+	a = allocator.mem_alloc(8);
+	allocator.mem_dump();
+	allocator.mem_free(d);
+	allocator.mem_dump();
 }
 
 int main()
