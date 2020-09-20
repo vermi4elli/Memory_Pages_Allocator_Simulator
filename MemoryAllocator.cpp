@@ -456,7 +456,7 @@ void MemoryAllocator::mem_dump()
 				++blockCounter;
 
 				bool taken = freeBlocks.find(i) == freeBlocks.end();
-				cout << "Block #" << setw(2) << blockCounter << ". Address: " << i << ". Data: " << *i << ". " << (taken ? "TAKEN" : "FREE") << endl;
+				cout << "Block #" << setw(2) << blockCounter << ". Address: " << i << ". Data: " << (taken ? *i : 0) << ". " << (taken ? "TAKEN" : "FREE") << endl;
 			}
 		}
 		else if (page.second.state == pageState::multipageBlockFilled)
@@ -506,15 +506,16 @@ void Test()
 	allocator.mem_dump();
 	e = allocator.mem_realloc(e, 14);
 	*(int*)e = 9;
-	b = allocator.mem_realloc(b, 14);
+	allocator.mem_dump();
+	b = allocator.mem_realloc(b, 15);
+	allocator.mem_dump();
+	b = allocator.mem_realloc(b, 300);
 	allocator.mem_dump();
 }
 
 int main()
 {
 	Test();
-
-	//TODO page data in multipage blocks
 
 	return 0;
 }
