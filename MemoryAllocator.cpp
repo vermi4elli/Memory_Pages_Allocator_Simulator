@@ -70,6 +70,12 @@ private:
 	// Creates a new page with the blocks of the chosen classSize.
 	void* CreateClassBlock(size_t classSize);
 
+	// Copies data from oldMem to NewMem fully/partly (newMem bigger/lesser than oldMem).
+	void CopyMemory(void* oldMem, void* newMem);
+
+	// Resets the flags of the block to pageState::free.
+	void ResetFlags(void* addr);
+
 public:
 	MemoryAllocator();
 
@@ -205,6 +211,49 @@ void* MemoryAllocator::CreateClassBlock(size_t classSize)
 
 	return GetFreeClassBlock(classSize);
 }
+void MemoryAllocator::CopyMemory(void* oldMem, void* newMem)
+{
+	int pageNumberOld = ((uint16_t*)oldMem - (uint16_t*)memPart) / PAGE_SIZE;
+	uint16_t* pageOld = (uint16_t*)memPart + pageNumberOld * PAGE_SIZE;
+	int oldSize = pageDescrPtrs[pageOld].classSize;
+
+	int pageNumberNew = ((uint16_t*)newMem - (uint16_t*)memPart) / PAGE_SIZE;
+	uint16_t* pageNew = (uint16_t*)memPart + pageNumberNew * PAGE_SIZE;
+	int newSize = pageDescrPtrs[pageNew].classSize;
+
+	char* j = (char*)newMem;
+	int counter = 0;
+	for (char* i = (char*)oldMem; counter < (newSize < oldSize ? newSize : oldSize); counter++, i++, j++)
+	{
+		*j = *i;
+	}
+}
+void MemoryAllocator::ResetFlags(void* addr)
+{
+	int pageNumber = ((uint16_t*)addr - (uint16_t*)memPart) / PAGE_SIZE;
+	uint16_t* page = (uint16_t*)memPart + pageNumber * PAGE_SIZE;
+
+	if (pageDescrPtrs[page].state == pageState::multipageBlockFilled)
+	{
+		int size = pageDescrPtrs[page].amount;
+		uint16_t* tempPage = page;
+		for (int i = 0; i < size; i++)
+		{
+			pageDescrPtrs[tempPage].state = pageState::free;
+			pageDescrPtrs[tempPage].classSize = 0;
+			pageDescrPtrs[tempPage].amount = 0;
+
+			freePages.emplace(find(freePages.begin(), freePages.end(), tempPage + PAGE_SIZE));
+
+			tempPage += PAGE_SIZE;
+		}
+	}
+	else
+	{
+		// yet to implement
+		// by changing the multi block pages a lil' bit differently
+	}
+}
 void MemoryAllocator::FillPageWithBlocks(void* page, size_t classSize)
 {
 	pageDescrPtrs[page].state = pageState::blockFilled;
@@ -248,11 +297,20 @@ void* MemoryAllocator::mem_alloc(size_t size)
 }
 void* MemoryAllocator::mem_realloc(void* addr, size_t size)
 {
-	return nullptr;
+	void* newMem = mem_alloc(size);
+	if (newMem == nullptr) return nullptr;
+
+	CopyMemory(addr, newMem);
+	ResetFlags(addr);
+
+	addr = nullptr;
+	return newMem;
 }
 void MemoryAllocator::mem_free(void* addr)
 {
+	ResetFlags(addr);
 
+	addr = nullptr;
 }
 void MemoryAllocator::mem_dump()
 {
@@ -316,7 +374,9 @@ void Test()
 	allocator.mem_alloc(16);
 	allocator.mem_alloc(60);
 	allocator.mem_alloc(162);
-	allocator.mem_alloc(800);
+	void* lol = allocator.mem_alloc(800);
+	allocator.mem_dump();
+	allocator.mem_free(lol);
 	allocator.mem_dump();
 
 
