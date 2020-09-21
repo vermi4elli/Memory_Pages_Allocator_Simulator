@@ -513,9 +513,30 @@ void Test()
 	allocator.mem_dump();
 }
 
+void TestForDoc()
+{
+	MemoryAllocator allocator;
+
+	allocator.mem_dump();
+
+	void* a = allocator.mem_alloc(sizeof(int));
+	*(int*)a = 6;
+
+	allocator.mem_dump();
+
+	a = allocator.mem_realloc(a, 10);
+
+	allocator.mem_dump();
+
+	allocator.mem_free(a);
+
+	allocator.mem_dump();
+}
+
 int main()
 {
 	Test();
+	//TestForDoc();
 
 	return 0;
 }
