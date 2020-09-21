@@ -38,7 +38,7 @@ it changes the Describers of the pages affected by the block (either multipage o
 #### `void mem_dump` function
 The `mem_dump` function prints the current state of each page in the memory part, with the blocks that are allocated in them, their addresses and data.
 ## HOW TO USE
-To use the algorithm, open the file in any IDE with C++ support or use the [C++ shell website to compile the code](http://cpp.sh/).   
+To use the algorithm, open the file in any IDE with C++ language supported.   
 Describe your use cases in `main()` function or implement it in separate function, then calling it in `main()` function.
 ## DEMONSTRATION
 
